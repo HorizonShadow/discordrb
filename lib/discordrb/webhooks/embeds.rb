@@ -74,6 +74,12 @@ module Discordrb::Webhooks
     # @return [EmbedAuthor, nil] author for this embed
     attr_accessor :author
 
+    # @see EmbedVideo
+    # @example Add a video to an embed
+    #   embed.video = Discordrb::Webhooks::EmbedVideo.new(url: 'https://github.com/meew0', width: 400, height: 400)
+    # @return [EmbedVideo, nil] video for this embed
+    attr_accessor :video
+
     # Add a field object to this embed.
     # @param field [EmbedField] The field to add.
     def <<(field)
