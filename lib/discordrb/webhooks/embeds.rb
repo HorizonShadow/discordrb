@@ -178,6 +178,26 @@ module Discordrb::Webhooks
     end
   end
 
+  class EmbedVideo
+    attr_accessor :url
+    attr_accessor :width
+    attr_accessor :height
+
+    def initialize(url: nil, width: nil, height: nil)
+      @url = url
+      @width = width
+      @height = height
+    end
+
+    def to_hash
+      {
+          url: @url,
+          width: @width,
+          height: @height
+      }
+    end
+  end
+
   # An embed's author will be shown at the top to indicate who "authored" the particular event the webhook was sent for.
   class EmbedAuthor
     # @return [String, nil] name of the author
