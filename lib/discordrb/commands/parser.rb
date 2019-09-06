@@ -63,7 +63,10 @@ module Discordrb::Commands
         bucket: attributes[:bucket],
 
         # Block for handling internal exceptions, or a string to respond with
-        rescue: attributes[:rescue]
+        rescue: attributes[:rescue],
+
+        # A list of aliases that reference this command
+        aliases: attributes[:aliases] || []
       }
 
       @block = block
@@ -78,13 +81,15 @@ module Discordrb::Commands
     # @return [String] the result of the execution.
     def call(event, arguments, chained = false, check_permissions = true)
       if arguments.length < @attributes[:min_args]
-        event.respond "Too few arguments for command `#{name}`!"
-        event.respond "Usage: `#{@attributes[:usage]}`" if @attributes[:usage]
+        response = "Too few arguments for command `#{name}`!"
+        response += "\nUsage: `#{@attributes[:usage]}`" if @attributes[:usage]
+        event.respond(response)
         return
       end
       if @attributes[:max_args] >= 0 && arguments.length > @attributes[:max_args]
-        event.respond "Too many arguments for command `#{name}`!"
-        event.respond "Usage: `#{@attributes[:usage]}`" if @attributes[:usage]
+        response = "Too many arguments for command `#{name}`!"
+        response += "\nUsage: `#{@attributes[:usage]}`" if @attributes[:usage]
+        event.respond(response)
         return
       end
       unless @attributes[:chain_usable]
@@ -97,26 +102,38 @@ module Discordrb::Commands
       if check_permissions
         rate_limited = event.bot.rate_limited?(@attributes[:bucket], event.author)
         if @attributes[:bucket] && rate_limited
-          if @attributes[:rate_limit_message]
-            event.respond @attributes[:rate_limit_message].gsub('%time%', rate_limited.round(2).to_s)
-          end
+          event.respond @attributes[:rate_limit_message].gsub('%time%', rate_limited.round(2).to_s) if @attributes[:rate_limit_message]
           return
         end
       end
 
       result = @block.call(event, *arguments)
       event.drain_into(result)
-    rescue LocalJumpError => ex # occurs when breaking
-      result = ex.exit_value
+    rescue LocalJumpError => e # occurs when breaking
+      result = e.exit_value
       event.drain_into(result)
-    rescue => exception # Something went wrong inside our @block!
+    rescue StandardError => e # Something went wrong inside our @block!
       rescue_value = @attributes[:rescue] || event.bot.attributes[:rescue]
       if rescue_value
-        event.respond(rescue_value.gsub('%exception%', exception.message)) if rescue_value.is_a?(String)
-        rescue_value.call(event, exception) if rescue_value.respond_to?(:call)
+        event.respond(rescue_value.gsub('%exception%', e.message)) if rescue_value.is_a?(String)
+        rescue_value.call(event, e) if rescue_value.respond_to?(:call)
       end
 
-      raise exception
+      raise e
+    end
+  end
+
+  # A command that references another command
+  class CommandAlias
+    # @return [Symbol] the name of this alias
+    attr_reader :name
+
+    # @return [Command] the command this alias points to
+    attr_reader :aliased_command
+
+    def initialize(name, aliased_command)
+      @name = name
+      @aliased_command = aliased_command
     end
   end
 
@@ -192,8 +209,10 @@ module Discordrb::Commands
         result += char if b_level <= 0
 
         next unless char == @attributes[:sub_chain_end] && !quoted
+
         b_level -= 1
         next unless b_level.zero?
+
         nested = @chain[b_start + 1..index - 1]
         subchain = CommandChain.new(nested, @bot, true)
         result += subchain.execute(event)

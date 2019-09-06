@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'discordrb'
 
 describe Discordrb::Bot do
@@ -33,6 +35,54 @@ describe Discordrb::Bot do
   it 'should set up' do
     expect(bot.server(server_id)).to eq(server)
     expect(bot.server(server_id).emoji.size).to eq(2)
+  end
+
+  it 'raises when token string is empty or nil' do
+    expect { described_class.new(token: '') }.to raise_error('Token string is empty or nil')
+    expect { described_class.new(token: nil) }.to raise_error('Token string is empty or nil')
+  end
+
+  describe '#parse_mentions' do
+    it 'parses user mentions' do
+      user_a = double(:user_a)
+      user_b = double(:user_b)
+      allow(bot).to receive(:user).with('123').and_return(user_a)
+      allow(bot).to receive(:user).with('456').and_return(user_b)
+      mentions = bot.parse_mentions('<@!123><@!456>', server)
+      expect(mentions).to eq([user_a, user_b])
+    end
+
+    it 'parses channel mentions' do
+      channel_a = double(:channel_a)
+      channel_b = double(:channel_b)
+      allow(bot).to receive(:channel).with('123', server).and_return(channel_a)
+      allow(bot).to receive(:channel).with('456', server).and_return(channel_b)
+      mentions = bot.parse_mentions('<#123><#456>', server)
+      expect(mentions).to eq([channel_a, channel_b])
+    end
+
+    it 'parses role mentions' do
+      role_a = double(:role_a)
+      role_b = double(:role_b)
+      allow(server).to receive(:role).with('123').and_return(role_a)
+      allow(server).to receive(:role).with('456').and_return(role_b)
+      mentions = bot.parse_mentions('<@&123><@&456>')
+      expect(mentions).to eq([role_a, role_b])
+    end
+
+    it 'parses emoji mentions' do
+      emoji_a = double(:emoji_a)
+      emoji_b = double(:emoji_b)
+      allow(bot).to receive(:emoji).with('123').and_return(emoji_a)
+      allow(bot).to receive(:emoji).with('456').and_return(emoji_b)
+      mentions = bot.parse_mentions('<a:foo:123><a:bar:456>')
+      expect(mentions).to eq([emoji_a, emoji_b])
+    end
+
+    it "doesn't parse invalid mentions" do
+      mentions = bot.parse_mentions('<<@123<@?123><#123<:foo:123<b:foo:456><@abc><@!abc>', server)
+      expect(mentions).to eq []
+    end
   end
 
   describe '#parse_mention' do
@@ -89,6 +139,63 @@ describe Discordrb::Bot do
       expect(emoji.name).to eq(edited_emoji_name)
       expect(emoji.server).to eq(server)
       expect(emoji.roles).to eq([])
+    end
+  end
+
+  describe '#send_file' do
+    let(:channel) { double(:channel, resolve_id: double) }
+
+    it 'defines original_filename when filename is passed' do
+      original_filename = double(:original_filename)
+      file = double(:file, original_filename: original_filename, read: true)
+      new_filename = double('new filename')
+
+      allow(Discordrb::API::Channel).to receive(:upload_file).and_return('{}')
+      allow(Discordrb::Message).to receive(:new)
+
+      bot.send_file(channel, file, filename: new_filename)
+      expect(file.original_filename).to eq new_filename
+    end
+
+    it 'does not define original_filename when filename is nil' do
+      original_filename = double(:original_filename)
+      file = double(:file, read: true, original_filename: original_filename)
+
+      allow(Discordrb::API::Channel).to receive(:upload_file).and_return('{}')
+      allow(Discordrb::Message).to receive(:new)
+
+      bot.send_file(channel, file)
+      expect(file.original_filename).to eq original_filename
+    end
+
+    it 'prepends "SPOILER_" when spoiler is truthy and the filename does not start with "SPOILER_"' do
+      file = double(:file, read: true)
+
+      allow(Discordrb::API::Channel).to receive(:upload_file).and_return('{}')
+      allow(Discordrb::Message).to receive(:new)
+
+      bot.send_file(channel, file, filename: 'file.txt', spoiler: true)
+      expect(file.original_filename).to eq 'SPOILER_file.txt'
+    end
+
+    it 'does not prepend "SPOILER_" if the filename starts with "SPOILER_"' do
+      file = double(:file, read: true, path: 'SPOILER_file.txt')
+
+      allow(Discordrb::API::Channel).to receive(:upload_file).and_return('{}')
+      allow(Discordrb::Message).to receive(:new)
+
+      bot.send_file(channel, file, spoiler: true)
+      expect(file.original_filename).to eq 'SPOILER_file.txt'
+    end
+
+    it 'uses the original filename when spoiler is truthy and filename is nil' do
+      file = double(:file, read: true, path: 'file.txt')
+
+      allow(Discordrb::API::Channel).to receive(:upload_file).and_return('{}')
+      allow(Discordrb::Message).to receive(:new)
+
+      bot.send_file(channel, file, spoiler: true)
+      expect(file.original_filename).to eq 'SPOILER_file.txt'
     end
   end
 end

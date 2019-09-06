@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'discordrb'
 
 # Create a bot
@@ -47,10 +49,10 @@ end
 # Here, we'll write a command that shows the current time and allows
 # the user to delete the message with a reaction.
 # We'll be using Bot#add_await to do this:
-# http://www.rubydoc.info/gems/discordrb/Discordrb%2FBot:add_await
+# https://www.rubydoc.info/gems/discordrb/Discordrb%2FBot:add_await
 
 # the unicode ":x:" emoji
-CROSS_MARK = "\u274c".freeze
+CROSS_MARK = "\u274c"
 
 bot.message(content: '!time') do |event|
   # Send a message, and store a reference to it that we can issue a delete request later
@@ -77,6 +79,6 @@ end
 bot.run
 
 # For more details about Awaits, see:
-# http://www.rubydoc.info/gems/discordrb/Discordrb/Await
+# https://www.rubydoc.info/gems/discordrb/Discordrb/Await
 # For a list of events you can use to await for, see:
-# http://www.rubydoc.info/gems/discordrb/Discordrb/Events
+# https://www.rubydoc.info/gems/discordrb/Discordrb/Events

@@ -82,8 +82,14 @@ module Discordrb::Events
     # @return [String] the message that has been saved by calls to {#<<} and will be sent to Discord upon completion.
     attr_reader :saved_message
 
-    # @return [File] the file that have been saved by calls to {#attach_file} and will be sent to Discord upon completion.
+    # @return [File] the file that has been saved by a call to {#attach_file} and will be sent to Discord upon completion.
     attr_reader :file
+
+    # @return [String] the filename set in {#attach_file} that will override the original filename when sent.
+    attr_reader :filename
+
+    # @return [true, false] Whether or not this file should appear as a spoiler. Set by {#attach_file}
+    attr_reader :file_spoiler
 
     # @!attribute [r] author
     #   @return [Member, User] who sent this message.
@@ -110,6 +116,8 @@ module Discordrb::Events
       @channel = message.channel
       @saved_message = ''
       @file = nil
+      @filename = nil
+      @file_spoiler = nil
     end
 
     # Sends file with a caption to the channel this message was sent in, right now.
@@ -117,25 +125,34 @@ module Discordrb::Events
     # because it avoids rate limiting problems
     # @param file [File] The file to send to the channel
     # @param caption [String] The caption attached to the file
+    # @param filename [String] Overrides the filename of the uploaded file
+    # @param spoiler [true, false] Whether or not this file should appear as a spoiler.
     # @return [Discordrb::Message] the message that was sent
     # @example Send a file from disk
     #   event.send_file(File.open('rubytaco.png', 'r'))
-    def send_file(file, caption: nil)
-      @message.channel.send_file(file, caption: caption)
+    def send_file(file, caption: nil, filename: nil, spoiler: nil)
+      @message.channel.send_file(file, caption: caption, filename: filename, spoiler: spoiler)
     end
 
     # Attaches a file to the message event and converts the message into
     # a caption.
     # @param file [File] The file to be attached
-    def attach_file(file)
+    # @param filename [String] Overrides the filename of the uploaded file
+    # @param spoiler [true, false] Whether or not this file should appear as a spoiler.
+    def attach_file(file, filename: nil, spoiler: nil)
       raise ArgumentError, 'Argument is not a file!' unless file.is_a?(File)
+
       @file = file
+      @filename = filename
+      @file_spoiler = spoiler
       nil
     end
 
     # Detaches a file from the message event.
     def detach_file
       @file = nil
+      @filename = nil
+      @file_spoiler = nil
     end
 
     # @return [true, false] whether or not this message was sent by the bot itself
@@ -164,14 +181,14 @@ module Discordrb::Events
           if a.is_a? String
             e.start_with? a
           elsif a.is_a? Regexp
-            (e =~ a) && (e =~ a).zero?
+            (e =~ a)&.zero?
           end
         end,
         matches_all(@attributes[:ending_with] || @attributes[:end_with], event.content) do |a, e|
           if a.is_a? String
             e.end_with? a
           elsif a.is_a? Regexp
-            a.match(e) ? e.end_with?(a.match(e)[-1]) : false
+            !(e =~ Regexp.new("#{a}$")).nil?
           end
         end,
         matches_all(@attributes[:containing] || @attributes[:contains], event.content) do |a, e|
@@ -221,7 +238,7 @@ module Discordrb::Events
       if event.file.nil?
         event.send_message(event.saved_message) unless event.saved_message.empty?
       else
-        event.send_file(event.file, caption: event.saved_message)
+        event.send_file(event.file, caption: event.saved_message, filename: event.filename, spoiler: event.file_spoiler)
       end
     end
   end
@@ -291,4 +308,11 @@ module Discordrb::Events
 
   # Event handler for {MessageDeleteEvent}
   class MessageDeleteEventHandler < MessageIDEventHandler; end
+
+  # Raised whenever a MESSAGE_UPDATE is recieved
+  # @see Discordrb::EventContainer#message_update
+  class MessageUpdateEvent < MessageEvent; end
+
+  # Event handler for {MessageUpdateEvent}
+  class MessageUpdateEventHandler < MessageEventHandler; end
 end

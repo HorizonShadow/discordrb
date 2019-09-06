@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'discordrb'
 
 describe Discordrb::Events do
@@ -98,6 +100,33 @@ describe Discordrb::Events do
     end
   end
 
+  describe Discordrb::Events::MessageEvent do
+    let(:bot) { double }
+    let(:channel) { double }
+    let(:message) { double('message', channel: channel) }
+
+    subject :event do
+      described_class.new(message, bot)
+    end
+
+    describe 'after_call' do
+      subject :handler do
+        Discordrb::Events::MessageEventHandler.new(double, double('proc'))
+      end
+
+      it 'calls send_file with attached file, filename, and spoiler' do
+        file = double(:file)
+        filename = double(:filename)
+        spoiler = double(:spoiler)
+        allow(file).to receive(:is_a?).with(File).and_return(true)
+
+        expect(event).to receive(:send_file).with(file, caption: '', filename: filename, spoiler: spoiler)
+        event.attach_file(file, filename: filename, spoiler: spoiler)
+        handler.after_call(event)
+      end
+    end
+  end
+
   describe Discordrb::Events::EventHandler do
     describe 'matches?' do
       it 'should raise an error' do
@@ -135,15 +164,53 @@ describe Discordrb::Events do
         # t.summary
       end
     end
+
+    shared_examples 'end_with attributes' do |expr, matching, non_matching|
+      describe 'end_with attribute' do
+        it "matches #{matching}" do
+          handler = Discordrb::Events::MessageEventHandler.new({ end_with: expr }, double('proc'))
+          event = double('event', channel: double('channel', private?: false), author: double('author'), timestamp: double('timestamp'), content: matching)
+          allow(event).to receive(:is_a?).with(Discordrb::Events::MessageEvent).and_return(true)
+          expect(handler.matches?(event)).to be_truthy
+        end
+
+        it "doesn't match #{non_matching}" do
+          handler = Discordrb::Events::MessageEventHandler.new({ end_with: expr }, double('proc'))
+          event = double('event', channel: double('channel', private?: false), author: double('author'), timestamp: double('timestamp'), content: non_matching)
+          allow(event).to receive(:is_a?).with(Discordrb::Events::MessageEvent).and_return(true)
+          expect(handler.matches?(event)).to be_falsy
+        end
+      end
+    end
+
+    include_examples(
+      'end_with attributes', /foo/, 'foo', 'f'
+    )
+
+    include_examples(
+      'end_with attributes', /!$/, 'foo!', 'foo'
+    )
+
+    include_examples(
+      'end_with attributes', /f(o)+/, 'foo', 'f'
+    )
+
+    include_examples(
+      'end_with attributes', /e(fg)+(x(abba){1,2}x)*[stu]/i, 'abcdefgfgxabbaabbaxT', 'abcdefgfgxabbaabbaxT.'
+    )
+
+    include_examples(
+      'end_with attributes', 'bar', 'foobar', 'foobarbaz'
+    )
   end
 
   # This data is shared across examples, so it needs to be defined here
   SERVER_ID = 1
-  SERVER_NAME = 'server_name'.freeze
+  SERVER_NAME = 'server_name'
   EMOJI1_ID = 10
-  EMOJI1_NAME = 'emoji_name_1'.freeze
+  EMOJI1_NAME = 'emoji_name_1'
   EMOJI2_ID = 11
-  EMOJI2_NAME = 'emoji_name_2'.freeze
+  EMOJI2_NAME = 'emoji_name_2'
 
   shared_examples 'ServerEvent' do
     describe '#initialize' do

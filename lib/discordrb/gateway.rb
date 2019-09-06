@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # This file uses code from Websocket::Client::Simple, licensed under the following license:
 #
 # Copyright (c) 2013-2014 Sho Hashimoto
@@ -22,8 +24,6 @@
 # LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
 # OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 # WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-
-require 'thread'
 
 module Discordrb
   # Gateway packet opcodes
@@ -168,8 +168,19 @@ module Discordrb
       end
 
       LOGGER.debug('WS thread created! Now waiting for confirmation that everything worked')
-      sleep(0.5) until @ws_success
-      LOGGER.debug('Confirmation received! Exiting run.')
+      loop do
+        sleep(0.5)
+
+        if @ws_success
+          LOGGER.debug('Confirmation received! Exiting run.')
+          break
+        end
+
+        if @should_reconnect == false
+          LOGGER.debug('Reconnection flag was unset. Exiting run.')
+          break
+        end
+      end
     end
 
     # Prevents all further execution until the websocket thread stops (e.g. through a closed connection).
@@ -179,7 +190,7 @@ module Discordrb
 
     # Whether the WebSocket connection to the gateway is currently open
     def open?
-      @handshake && @handshake.finished? && !@closed
+      @handshake&.finished? && !@closed
     end
 
     # Stops the bot gracefully, disconnecting the websocket without immediately killing the thread. This means that
@@ -400,12 +411,12 @@ module Discordrb
 
     # Sends a custom packet over the connection. This can be useful to implement future yet unimplemented functionality
     # or for testing. You probably shouldn't use this unless you know what you're doing.
-    # @param op [Integer] The opcode the packet should be sent as. Can be one of {Opcodes} or a custom value if
+    # @param opcode [Integer] The opcode the packet should be sent as. Can be one of {Opcodes} or a custom value if
     #   necessary.
     # @param packet [Object] Some arbitrary JSON-serialisable data that should be sent as the `d` field.
-    def send_packet(op, packet)
+    def send_packet(opcode, packet)
       data = {
-        op: op,
+        op: opcode,
         d: packet
       }
 
@@ -444,7 +455,7 @@ module Discordrb
             else
               sleep 1
             end
-          rescue => e
+          rescue StandardError => e
             LOGGER.error('An error occurred while heartbeating!')
             LOGGER.log_exception(e)
           end
@@ -491,14 +502,19 @@ module Discordrb
 
       if secure_uri?(uri)
         ctx = OpenSSL::SSL::SSLContext.new
-        ctx.ssl_version = 'SSLv23'
-        ctx.verify_mode = OpenSSL::SSL::VERIFY_NONE # use VERIFY_PEER for verification
 
-        cert_store = OpenSSL::X509::Store.new
-        cert_store.set_default_paths
-        ctx.cert_store = cert_store
+        if ENV['DISCORDRB_SSL_VERIFY_NONE']
+          ctx.ssl_version = 'SSLv23'
+          ctx.verify_mode = OpenSSL::SSL::VERIFY_NONE # use VERIFY_PEER for verification
 
-        socket = ::OpenSSL::SSL::SSLSocket.new(socket, ctx)
+          cert_store = OpenSSL::X509::Store.new
+          cert_store.set_default_paths
+          ctx.cert_store = cert_store
+        else
+          ctx.set_params ssl_version: :TLSv1_2
+        end
+
+        socket = OpenSSL::SSL::SSLSocket.new(socket, ctx)
         socket.connect
       end
 
@@ -560,7 +576,7 @@ module Discordrb
 
       # We're done! Delegate to the websocket loop
       websocket_loop
-    rescue => e
+    rescue StandardError => e
       LOGGER.error('An error occurred while connecting to the websocket!')
       LOGGER.log_exception(e)
     end
@@ -614,7 +630,7 @@ module Discordrb
             # If the handshake hasn't finished, handle it
             handle_handshake_data(recv_data)
           end
-        rescue => e
+        rescue StandardError => e
           handle_error(e)
         end
       end
@@ -743,7 +759,7 @@ module Discordrb
       LOGGER.debug("Trace: #{packet['d']['_trace']}")
       LOGGER.debug("Session: #{@session.inspect}")
 
-      if @session && @session.should_resume?
+      if @session&.should_resume?
         # Make sure we're sending heartbeats again
         @session.resume
 
@@ -766,18 +782,27 @@ module Discordrb
       handle_close(e)
     end
 
+    # Close codes that are unrecoverable, after which we should not try to reconnect.
+    # - 4003: Not authenticated. How did this happen?
+    # - 4004: Authentication failed. Token was wrong, nothing we can do.
+    # - 4011: Sharding required. Currently requires developer intervention.
+    FATAL_CLOSE_CODES = [4003, 4004, 4011].freeze
+
     def handle_close(e)
+      @bot.__send__(:raise_event, Events::DisconnectEvent.new(@bot))
+
       if e.respond_to? :code
         # It is a proper close frame we're dealing with, print reason and message to console
         LOGGER.error('Websocket close frame received!')
         LOGGER.error("Code: #{e.code}")
         LOGGER.error("Message: #{e.data}")
+        @should_reconnect = false if FATAL_CLOSE_CODES.include?(e.code)
       elsif e.is_a? Exception
         # Log the exception
         LOGGER.error('The websocket connection has closed due to an error!')
         LOGGER.log_exception(e)
       else
-        LOGGER.error("The websocket connection has closed: #{e.inspect}")
+        LOGGER.error("The websocket connection has closed: #{e&.inspect || '(no information)'}")
       end
     end
 
@@ -795,7 +820,7 @@ module Discordrb
       # Try to send it
       begin
         @socket.write frame.to_s
-      rescue => e
+      rescue StandardError => e
         # There has been an error!
         @pipe_broken = true
         handle_internal_close(e)
@@ -807,7 +832,7 @@ module Discordrb
       return if @closed
 
       # Suspend the session so we don't send heartbeats
-      @session.suspend if @session
+      @session&.suspend
 
       # Send a close frame (if we can)
       send nil, :close unless @pipe_broken
@@ -823,7 +848,7 @@ module Discordrb
       end
 
       # Close the socket if possible
-      @socket.close if @socket
+      @socket&.close
       @socket = nil
 
       # Make sure we do necessary things as soon as we're closed

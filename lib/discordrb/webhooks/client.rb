@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'rest-client'
 require 'json'
 
@@ -13,11 +15,7 @@ module Discordrb::Webhooks
     # @param token [String] The webhook's authorisation token. Will only be used
     #   if `url` is not set.
     def initialize(url: nil, id: nil, token: nil)
-      @url = if url
-               url
-             else
-               generate_url(id, token)
-             end
+      @url = url || generate_url(id, token)
     end
 
     # Executes the webhook this client points to with the given data.

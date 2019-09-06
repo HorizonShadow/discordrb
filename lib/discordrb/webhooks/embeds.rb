@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Discordrb::Webhooks
   # An embed is a multipart-style attachment to a webhook message that can have a variety of different purposes and
   # appearances.
@@ -35,18 +37,20 @@ module Discordrb::Webhooks
     alias_method :color, :colour
 
     # Sets the colour of the bar to the side of the embed to something new.
-    # @param value [Integer, String, {Integer, Integer, Integer}, #to_i, nil] The colour in decimal, hexadecimal, R/G/B decimal, or nil to clear the embeds colour
+    # @param value [String, Integer, {Integer, Integer, Integer}, #to_i, nil] The colour in decimal, hexadecimal, R/G/B decimal, or nil to clear the embeds colour
     #   form.
     def colour=(value)
       if value.nil?
         @colour = nil
       elsif value.is_a? Integer
         raise ArgumentError, 'Embed colour must be 24-bit!' if value >= 16_777_216
+
         @colour = value
       elsif value.is_a? String
         self.colour = value.delete('#').to_i(16)
       elsif value.is_a? Array
         raise ArgumentError, 'Colour tuple must have three values!' if value.length != 3
+
         self.colour = value[0] << 16 | value[1] << 8 | value[2]
       else
         self.colour = value.to_i
@@ -104,14 +108,14 @@ module Discordrb::Webhooks
         title: @title,
         description: @description,
         url: @url,
-        timestamp: @timestamp && @timestamp.utc.iso8601,
+        timestamp: @timestamp&.utc&.iso8601,
         color: @colour,
-        footer: @footer && @footer.to_hash,
-        image: @image && @image.to_hash,
-        thumbnail: @thumbnail && @thumbnail.to_hash,
-        video: @video && @video.to_hash,
-        provider: @provider && @provider.to_hash,
-        author: @author && @author.to_hash,
+        footer: @footer&.to_hash,
+        image: @image&.to_hash,
+        thumbnail: @thumbnail&.to_hash,
+        video: @video&.to_hash,
+        provider: @provider&.to_hash,
+        author: @author&.to_hash,
         fields: @fields.map(&:to_hash)
       }
     end

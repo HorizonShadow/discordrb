@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'discordrb/webhooks'
 
 describe Discordrb::Webhooks do
@@ -7,7 +9,7 @@ describe Discordrb::Webhooks do
 
       embed = builder.add_embed do |e|
         e.title = 'a'
-        e.image = Discordrb::Webhooks::EmbedImage.new(url: 'http://some.url/image.png')
+        e.image = Discordrb::Webhooks::EmbedImage.new(url: 'https://example.com/image.png')
       end
 
       expect(builder.embeds.length).to eq 1

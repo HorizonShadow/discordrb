@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # API calls for Server
 module Discordrb::API::Server
   module_function
@@ -83,13 +85,13 @@ module Discordrb::API::Server
 
   # Create a channel
   # https://discordapp.com/developers/docs/resources/guild#create-guild-channel
-  def create_channel(token, server_id, name, type, topic, bitrate, user_limit, permission_overwrites, parent_id, nsfw, reason = nil)
+  def create_channel(token, server_id, name, type, topic, bitrate, user_limit, permission_overwrites, parent_id, nsfw, rate_limit_per_user, position, reason = nil)
     Discordrb::API.request(
       :guilds_sid_channels,
       server_id,
       :post,
       "#{Discordrb::API.api_base}/guilds/#{server_id}/channels",
-      { name: name, type: type, topic: topic, bitrate: bitrate, user_limit: user_limit, permission_overwrites: permission_overwrites, parent_id: parent_id, nsfw: nsfw }.to_json,
+      { name: name, type: type, topic: topic, bitrate: bitrate, user_limit: user_limit, permission_overwrites: permission_overwrites, parent_id: parent_id, nsfw: nsfw, rate_limit_per_user: rate_limit_per_user, position: position }.to_json,
       Authorization: token,
       content_type: :json,
       'X-Audit-Log-Reason': reason
@@ -183,7 +185,7 @@ module Discordrb::API::Server
   # Ban a user from a server and delete their messages from the last message_days days
   # https://discordapp.com/developers/docs/resources/guild#create-guild-ban
   def ban_user(token, server_id, user_id, message_days, reason = nil)
-    reason = URI.encode(reason) if reason
+    reason = URI.encode_www_form_component(reason) if reason
     Discordrb::API.request(
       :guilds_sid_bans_uid,
       server_id,
@@ -450,28 +452,30 @@ module Discordrb::API::Server
     )
   end
 
-  # Adds a custom emoji
-  def add_emoji(token, server_id, image, name, reason = nil)
+  # Adds a custom emoji.
+  # https://discordapp.com/developers/docs/resources/emoji#create-guild-emoji
+  def add_emoji(token, server_id, image, name, roles = [], reason = nil)
     Discordrb::API.request(
       :guilds_sid_emojis,
       server_id,
       :post,
       "#{Discordrb::API.api_base}/guilds/#{server_id}/emojis",
-      { image: image, name: name }.to_json,
+      { image: image, name: name, roles: roles }.to_json,
       Authorization: token,
       content_type: :json,
       'X-Audit-Log-Reason': reason
     )
   end
 
-  # Changes an emoji name
-  def edit_emoji(token, server_id, emoji_id, name, reason = nil)
+  # Changes an emoji name and/or roles.
+  # https://discordapp.com/developers/docs/resources/emoji#modify-guild-emoji
+  def edit_emoji(token, server_id, emoji_id, name, roles = nil, reason = nil)
     Discordrb::API.request(
       :guilds_sid_emojis_eid,
       server_id,
       :patch,
       "#{Discordrb::API.api_base}/guilds/#{server_id}/emojis/#{emoji_id}",
-      { name: name }.to_json,
+      { name: name, roles: roles }.to_json,
       Authorization: token,
       content_type: :json,
       'X-Audit-Log-Reason': reason
@@ -479,6 +483,7 @@ module Discordrb::API::Server
   end
 
   # Deletes a custom emoji
+  # https://discordapp.com/developers/docs/resources/emoji#delete-guild-emoji
   def delete_emoji(token, server_id, emoji_id, reason = nil)
     Discordrb::API.request(
       :guilds_sid_emojis_eid,

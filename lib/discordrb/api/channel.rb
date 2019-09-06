@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # API calls for Channel
 module Discordrb::API::Channel
   module_function
@@ -16,8 +18,8 @@ module Discordrb::API::Channel
 
   # Update a channel's data
   # https://discordapp.com/developers/docs/resources/channel#modify-channel
-  def update(token, channel_id, name, topic, position, bitrate, user_limit, nsfw, permission_overwrites = nil, parent_id = nil, reason = nil)
-    data = { name: name, position: position, topic: topic, bitrate: bitrate, user_limit: user_limit, nsfw: nsfw, parent_id: parent_id }
+  def update(token, channel_id, name, topic, position, bitrate, user_limit, nsfw, permission_overwrites = nil, parent_id = nil, rate_limit_per_user = nil, reason = nil)
+    data = { name: name, position: position, topic: topic, bitrate: bitrate, user_limit: user_limit, nsfw: nsfw, parent_id: parent_id, rate_limit_per_user: rate_limit_per_user }
     data[:permission_overwrites] = permission_overwrites unless permission_overwrites.nil?
     Discordrb::API.request(
       :channels_cid,
@@ -70,7 +72,7 @@ module Discordrb::API::Channel
 
   # Send a message to a channel
   # https://discordapp.com/developers/docs/resources/channel#create-message
-  def create_message(token, channel_id, message, tts = false, embed = nil, nonce = nil) # send message
+  def create_message(token, channel_id, message, tts = false, embed = nil, nonce = nil)
     Discordrb::API.request(
       :channels_cid_messages_mid,
       channel_id,
@@ -82,7 +84,8 @@ module Discordrb::API::Channel
     )
   rescue RestClient::BadRequest => e
     parsed = JSON.parse(e.response.body)
-    raise Discordrb::Errors::MessageTooLong, "Message over the character limit (#{message.length} > 2000)" if parsed['content'] && parsed['content'].is_a?(Array) && parsed['content'].first == 'Must be 2000 or fewer in length.'
+    raise Discordrb::Errors::MessageTooLong, "Message over the character limit (#{message.length} > 2000)" if parsed['content']&.is_a?(Array) && parsed['content'].first == 'Must be 2000 or fewer in length.'
+
     raise
   end
 
@@ -142,7 +145,7 @@ module Discordrb::API::Channel
   # Create a reaction on a message using this client
   # https://discordapp.com/developers/docs/resources/channel#create-reaction
   def create_reaction(token, channel_id, message_id, emoji)
-    emoji = URI.encode(emoji) unless emoji.ascii_only?
+    emoji = URI.encode_www_form_component(emoji) unless emoji.ascii_only?
     Discordrb::API.request(
       :channels_cid_messages_mid_reactions_emoji_me,
       channel_id,
@@ -157,7 +160,7 @@ module Discordrb::API::Channel
   # Delete this client's own reaction on a message
   # https://discordapp.com/developers/docs/resources/channel#delete-own-reaction
   def delete_own_reaction(token, channel_id, message_id, emoji)
-    emoji = URI.encode(emoji) unless emoji.ascii_only?
+    emoji = URI.encode_www_form_component(emoji) unless emoji.ascii_only?
     Discordrb::API.request(
       :channels_cid_messages_mid_reactions_emoji_me,
       channel_id,
@@ -170,7 +173,7 @@ module Discordrb::API::Channel
   # Delete another client's reaction on a message
   # https://discordapp.com/developers/docs/resources/channel#delete-user-reaction
   def delete_user_reaction(token, channel_id, message_id, emoji, user_id)
-    emoji = URI.encode(emoji) unless emoji.ascii_only?
+    emoji = URI.encode_www_form_component(emoji) unless emoji.ascii_only?
     Discordrb::API.request(
       :channels_cid_messages_mid_reactions_emoji_uid,
       channel_id,
@@ -182,13 +185,14 @@ module Discordrb::API::Channel
 
   # Get a list of clients who reacted with a specific reaction on a message
   # https://discordapp.com/developers/docs/resources/channel#get-reactions
-  def get_reactions(token, channel_id, message_id, emoji)
-    emoji = URI.encode(emoji) unless emoji.ascii_only?
+  def get_reactions(token, channel_id, message_id, emoji, before_id, after_id, limit = 100)
+    emoji = URI.encode_www_form_component(emoji) unless emoji.ascii_only?
+    query_string = "limit=#{limit}#{"&before=#{before_id}" if before_id}#{"&after=#{after_id}" if after_id}"
     Discordrb::API.request(
       :channels_cid_messages_mid_reactions_emoji,
       channel_id,
       :get,
-      "#{Discordrb::API.api_base}/channels/#{channel_id}/messages/#{message_id}/reactions/#{emoji}",
+      "#{Discordrb::API.api_base}/channels/#{channel_id}/messages/#{message_id}/reactions/#{emoji}?#{query_string}",
       Authorization: token
     )
   end

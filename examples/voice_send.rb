@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # discordrb can send music or other audio data to voice channels. This example exists to show that off.
 #
 # To avoid copyright infringement, the example music I will be using is a self-composed piece of highly debatable
@@ -39,7 +41,7 @@ end
 # very easily add support for it. It has the advantage that absolutely no transcoding has to be done, so it is very
 # light on CPU in comparison to `play_file`.
 #
-# A conversion utility that converts existing audio files to DCA can be found here: https://github.com/nstafie/dca-rs
+# A conversion utility that converts existing audio files to DCA can be found here: https://github.com/RaymondSchnyder/dca-rs
 bot.command(:play_dca) do |event|
   voice_bot = event.voice
 

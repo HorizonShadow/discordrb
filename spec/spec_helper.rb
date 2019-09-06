@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'rspec-prof'
 require 'simplecov'
 SimpleCov.start
@@ -21,7 +23,7 @@ require 'json'
 # The `.rspec` file also contains a few flags that are not defaults but that
 # users commonly want.
 #
-# See http://rubydoc.info/gems/rspec-core/RSpec/Core/Configuration
+# See https://rubydoc.info/gems/rspec-core/RSpec/Core/Configuration
 RSpec.configure do |config|
   # rspec-expectations config goes here. You can use an alternate
   # assertion/expectation library such as wrong or the stdlib/minitest
@@ -102,7 +104,7 @@ end
 RSpec::Matchers.define_negated_matcher :an_array_excluding, :include
 
 def load_data_file(*name)
-  JSON.parse(File.read("#{File.dirname(__FILE__)}/data/#{name.join('/')}.json"))
+  JSON.parse(File.read("#{File.dirname(__FILE__)}/json_examples/#{name.join('/')}.json"))
 end
 
 # Creates a helper method that gives access to a particular fixture's data.

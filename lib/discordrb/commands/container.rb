@@ -21,10 +21,10 @@ module Discordrb::Commands
     #   permissions to execute a command. %name% in the message will be replaced with the name of the command. Disable
     #   the message by setting this option to false.
     # @option attributes [Array<Symbol>] :required_permissions Discord action permissions (e.g. `:kick_members`) that
-    #   should be required to use this command. See {Discordrb::Permissions::Flags} for a list.
-    # @option attributes [Array<Role>, Array<#resolve_id>] :required_roles Roles that user must have to use this command
+    #   should be required to use this command. See {Discordrb::Permissions::FLAGS} for a list.
+    # @option attributes [Array<Role>, Array<String, Integer>] :required_roles Roles, or their IDs, that user must have to use this command
     #   (user must have all of them).
-    # @option attributes [Array<Role>, Array<#resolve_id>] :allowed_roles Roles that user should have to use this command
+    # @option attributes [Array<Role>, Array<String, Integer>] :allowed_roles Roles, or their IDs, that user should have to use this command
     #   (user should have at least one of them).
     # @option attributes [Array<String, Integer, Channel>] :channels The channels that this command can be used on. An
     #   empty array indicates it can be used on any channel. Supersedes the command bot attribute.
@@ -55,6 +55,8 @@ module Discordrb::Commands
     # @note `LocalJumpError`s are rescued from internally, giving bots the opportunity to use `return` or `break` in
     #   their blocks without propagating an exception.
     # @return [Command] The command that was added.
+    # @deprecated The command name argument will no longer support arrays in the next release.
+    #   Use the `aliases` attribute instead.
     def command(name, attributes = {}, &block)
       @commands ||= {}
       if name.is_a? Array
@@ -67,7 +69,11 @@ module Discordrb::Commands
 
         new_command
       else
-        @commands[name] = Command.new(name, attributes, &block)
+        new_command = Command.new(name, attributes, &block)
+        new_command.attributes[:aliases].each do |aliased_name|
+          @commands[aliased_name] = CommandAlias.new(aliased_name, new_command)
+        end
+        @commands[name] = new_command
       end
     end
 
@@ -94,9 +100,7 @@ module Discordrb::Commands
       container_modules = container.singleton_class.included_modules
 
       # If the container is an EventContainer and we can include it, then do that
-      if container_modules.include?(Discordrb::EventContainer) && respond_to?(:include_events)
-        include_events(container)
-      end
+      include_events(container) if container_modules.include?(Discordrb::EventContainer) && respond_to?(:include_events)
 
       if container_modules.include? Discordrb::Commands::CommandContainer
         include_commands(container)

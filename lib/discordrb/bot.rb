@@ -92,9 +92,9 @@ module Discordrb
     # @param parse_self [true, false] Whether the bot should react on its own messages. It's best to turn this off
     #   unless you really need this so you don't inadvertently create infinite loops.
     # @param shard_id [Integer] The number of the shard this bot should handle. See
-    #   https://github.com/hammerandchisel/discord-api-docs/issues/17 for how to do sharding.
+    #   https://github.com/discordapp/discord-api-docs/issues/17 for how to do sharding.
     # @param num_shards [Integer] The total number of shards that should be running. See
-    #   https://github.com/hammerandchisel/discord-api-docs/issues/17 for how to do sharding.
+    #   https://github.com/discordapp/discord-api-docs/issues/17 for how to do sharding.
     # @param redact_token [true, false] Whether the bot should redact the token in logs. Default is true.
     # @param ignore_bots [true, false] Whether the bot should ignore bot accounts or not. Default is false.
     # @param compress_mode [:none, :large, :stream] Sets which compression mode should be used when connecting
@@ -102,11 +102,11 @@ module Discordrb
     #   production bots). `:large` will request that large payloads are received compressed. `:stream` will request
     #   that all data be received in a continuous compressed stream.
     def initialize(
-        log_mode: :normal,
-        token: nil, client_id: nil,
-        type: nil, name: '', fancy_log: false, suppress_ready: false, parse_self: false,
-        shard_id: nil, num_shards: nil, redact_token: true, ignore_bots: false,
-        compress_mode: :stream
+      log_mode: :normal,
+      token: nil, client_id: nil,
+      type: nil, name: '', fancy_log: false, suppress_ready: false, parse_self: false,
+      shard_id: nil, num_shards: nil, redact_token: true, ignore_bots: false,
+      compress_mode: :large
     )
       LOGGER.mode = log_mode
       LOGGER.token = token if redact_token
@@ -124,6 +124,8 @@ module Discordrb
       @prevent_ready = suppress_ready
 
       @compress_mode = compress_mode
+
+      raise 'Token string is empty or nil' if token.nil? || token.empty?
 
       @token = process_token(@type, token)
       @gateway = Gateway.new(self, @token, @shard_key, @compress_mode)
@@ -146,6 +148,7 @@ module Discordrb
     # @return [Hash<Integer => User>] The users by ID.
     def users
       gateway_check
+      unavailable_servers_check
       @users
     end
 
@@ -153,18 +156,20 @@ module Discordrb
     # @return [Hash<Integer => Server>] The servers by ID.
     def servers
       gateway_check
+      unavailable_servers_check
       @servers
     end
 
     # @overload emoji(id)
     #   Return an emoji by its ID
-    #   @param id [Integer, #resolve_id] The emoji's ID.
+    #   @param id [String, Integer] The emoji's ID.
     #   @return [Emoji, nil] the emoji object. `nil` if the emoji was not found.
     # @overload emoji
     #   The list of emoji the bot can use.
     #   @return [Array<Emoji>] the emoji available.
     def emoji(id = nil)
       gateway_check
+      unavailable_servers_check
 
       emoji_hash = @servers.values.map(&:emoji).reduce(&:merge)
       if id
@@ -200,6 +205,7 @@ module Discordrb
     # @return [Application, nil] The bot's application info. Returns `nil` if bot is not a bot account.
     def bot_application
       return unless @type == :bot
+
       response = API.oauth_application(token)
       Application.new(JSON.parse(response), self)
     end
@@ -270,7 +276,7 @@ module Discordrb
 
     # Creates an OAuth invite URL that can be used to invite this bot to a particular server.
     # @param server [Server, nil] The server the bot should be invited to, or nil if a general invite should be created.
-    # @param permission_bits [Integer, String] Permission bits that should be appended to invite url.
+    # @param permission_bits [String, Integer] Permission bits that should be appended to invite url.
     # @return [String] the OAuth invite URL.
     def invite_url(server: nil, permission_bits: nil)
       @client_id ||= bot_application.id
@@ -304,7 +310,7 @@ module Discordrb
     # data can then be sent. After connecting, the bot can also be accessed using {#voice}. If the bot is already
     # connected to voice, the existing connection will be terminated - you don't have to call
     # {Discordrb::Voice::VoiceBot#destroy} before calling this method.
-    # @param chan [Channel, Integer, #resolve_id] The voice channel to connect to.
+    # @param chan [Channel, String, Integer] The voice channel, or its ID, to connect to.
     # @param encrypted [true, false] Whether voice communication should be encrypted using RbNaCl's SecretBox
     #   (uses an XSalsa20 stream cipher for encryption and Poly1305 for authentication)
     # @return [Voice::VoiceBot] the initialized bot over which audio data can then be sent.
@@ -333,7 +339,7 @@ module Discordrb
 
     # Disconnects the client from a specific voice connection given the server ID. Usually it's more convenient to use
     # {Discordrb::Voice::VoiceBot#destroy} rather than this.
-    # @param server [Server, Integer, #resolve_id] The server the voice connection is on.
+    # @param server [Server, String, Integer] The server, or server ID, the voice connection is on.
     # @param destroy_vws [true, false] Whether or not the VWS should also be destroyed. If you're calling this method
     #   directly, you should leave it as true.
     def voice_destroy(server, destroy_vws = true)
@@ -352,7 +358,7 @@ module Discordrb
     end
 
     # Sends a text message to a channel given its ID and the message's content.
-    # @param channel [Channel, Integer, #resolve_id] The channel to send something to.
+    # @param channel [Channel, String, Integer] The channel, or its ID, to send something to.
     # @param content [String] The text that should be sent as a message. It is limited to 2000 characters (Discord imposed).
     # @param tts [true, false] Whether or not this message should be sent using Discord text-to-speech.
     # @param embed [Hash, Discordrb::Webhooks::Embed, nil] The rich embed to append to this message.
@@ -367,7 +373,7 @@ module Discordrb
 
     # Sends a text message to a channel given its ID and the message's content,
     # then deletes it after the specified timeout in seconds.
-    # @param channel [Channel, Integer, #resolve_id] The channel to send something to.
+    # @param channel [Channel, String, Integer] The channel, or its ID, to send something to.
     # @param content [String] The text that should be sent as a message. It is limited to 2000 characters (Discord imposed).
     # @param timeout [Float] The amount of time in seconds after which the message sent will be deleted.
     # @param tts [true, false] Whether or not this message should be sent using Discord text-to-speech.
@@ -386,13 +392,24 @@ module Discordrb
 
     # Sends a file to a channel. If it is an image, it will automatically be embedded.
     # @note This executes in a blocking way, so if you're sending long files, be wary of delays.
-    # @param channel [Channel, Integer, #resolve_id] The channel to send something to.
+    # @param channel [Channel, String, Integer] The channel, or its ID, to send something to.
     # @param file [File] The file that should be sent.
     # @param caption [string] The caption for the file.
     # @param tts [true, false] Whether or not this file's caption should be sent using Discord text-to-speech.
+    # @param filename [String] Overrides the filename of the uploaded file
+    # @param spoiler [true, false] Whether or not this file should appear as a spoiler.
     # @example Send a file from disk
     #   bot.send_file(83281822225530880, File.open('rubytaco.png', 'r'))
-    def send_file(channel, file, caption: nil, tts: false)
+    def send_file(channel, file, caption: nil, tts: false, filename: nil, spoiler: nil)
+      if file.respond_to?(:read)
+        if spoiler
+          filename ||= File.basename(file.path)
+          filename = 'SPOILER_' + filename unless filename.start_with? 'SPOILER_'
+        end
+        # https://github.com/rest-client/rest-client/blob/v2.0.2/lib/restclient/payload.rb#L160
+        file.define_singleton_method(:original_filename) { filename } if filename
+      end
+
       channel = channel.resolve_id
       response = API::Channel.upload_file(token, channel, file, caption: caption, tts: tts)
       Message.new(JSON.parse(response), self)
@@ -433,28 +450,46 @@ module Discordrb
       API.update_oauth_application(@token, name, redirect_uris, description, icon)
     end
 
-    # Gets the user, channel, role or emoji from a mention of the user, channel, role or emoji.
+    # Gets the users, channels, roles and emoji from a string.
+    # @param mentions [String] The mentions, which should look like `<@12314873129>`, `<#123456789>`, `<@&123456789>` or `<:name:126328:>`.
+    # @param server [Server, nil] The server of the associated mentions. (recommended for role parsing, to speed things up)
+    # @return [Array<User, Channel, Role, Emoji>] The array of users, channels, roles and emoji identified by the mentions, or `nil` if none exists.
+    def parse_mentions(mentions, server = nil)
+      array_to_return = []
+      # While possible mentions may be in message
+      while mentions.include?('<') && mentions.include?('>')
+        # Removing all content before the next possible mention
+        mentions = mentions.split('<', 2)[1]
+        # Locate the first valid mention enclosed in `<...>`, otherwise advance to the next open `<`
+        next unless mentions.split('>', 2).first.length < mentions.split('<', 2).first.length
+
+        # Store the possible mention value to be validated with RegEx
+        mention = mentions.split('>', 2).first
+        if /@!?(?<id>\d+)/ =~ mention
+          array_to_return << user(id) unless user(id).nil?
+        elsif /#(?<id>\d+)/ =~ mention
+          array_to_return << channel(id, server) unless channel(id, server).nil?
+        elsif /@&(?<id>\d+)/ =~ mention
+          if server
+            array_to_return << server.role(id) unless server.role(id).nil?
+          else
+            @servers.values.each do |element|
+              array_to_return << element.role(id) unless element.role(id).nil?
+            end
+          end
+        elsif /(?<animated>^[a]|^${0}):(?<name>\w+):(?<id>\d+)/ =~ mention
+          array_to_return << (emoji(id) || Emoji.new({ 'animated' => !animated.nil?, 'name' => name, 'id' => id }, self, nil))
+        end
+      end
+      array_to_return
+    end
+
+    # Gets the user, channel, role or emoji from a string.
     # @param mention [String] The mention, which should look like `<@12314873129>`, `<#123456789>`, `<@&123456789>` or `<:name:126328:>`.
     # @param server [Server, nil] The server of the associated mention. (recommended for role parsing, to speed things up)
     # @return [User, Channel, Role, Emoji] The user, channel, role or emoji identified by the mention, or `nil` if none exists.
     def parse_mention(mention, server = nil)
-      # Mention format: <@id>
-      if /<@!?(?<id>\d+)>/ =~ mention
-        user(id)
-      elsif /<#(?<id>\d+)>/ =~ mention
-        channel(id, server)
-      elsif /<@&(?<id>\d+)>/ =~ mention
-        return server.role(id) if server
-        @servers.values.each do |element|
-          role = element.role(id)
-          return role unless role.nil?
-        end
-
-        # Return nil if no role is found
-        nil
-      elsif /<(?<animated>a)?:(?<name>\w+):(?<id>\d+)>/ =~ mention
-        emoji(id) || Emoji.new({ 'animated' => !animated.nil?, 'name' => name, 'id' => id }, self, nil)
-      end
+      parse_mentions(mention, server).first
     end
 
     # Updates presence status.
@@ -486,7 +521,6 @@ module Discordrb
     def game=(name)
       gateway_check
       update_status(@status, name, nil)
-      name
     end
 
     alias_method :playing=, :game=
@@ -497,7 +531,6 @@ module Discordrb
     def listening=(name)
       gateway_check
       update_status(@status, name, nil, nil, nil, 2)
-      name
     end
 
     # Sets the current watching status to the specified name.
@@ -506,7 +539,6 @@ module Discordrb
     def watching=(name)
       gateway_check
       update_status(@status, name, nil, nil, nil, 3)
-      name
     end
 
     # Sets the currently online stream to the specified name and Twitch URL.
@@ -573,6 +605,7 @@ module Discordrb
     # @deprecated Will be changed to blocking behavior in v4.0. Use {#add_await!} instead.
     def add_await(key, type, attributes = {}, &block)
       raise "You can't await an AwaitEvent!" if type == Discordrb::Events::AwaitEvent
+
       await = Await.new(self, key, type, attributes, block)
       @awaits ||= {}
       @awaits[key] = await
@@ -587,7 +620,7 @@ module Discordrb
       raise "You can't await an AwaitEvent!" if type == Discordrb::Events::AwaitEvent
 
       timeout = attributes[:timeout]
-      raise ArgumentError, 'Timeout must be a number > 0' if timeout && timeout.is_a?(Numeric) && timeout <= 0
+      raise ArgumentError, 'Timeout must be a number > 0' if timeout&.is_a?(Numeric) && !timeout&.positive?
 
       mutex = Mutex.new
       cv = ConditionVariable.new
@@ -612,25 +645,26 @@ module Discordrb
 
       remove_handler(handler)
       raise 'ConditionVariable was signaled without returning an event!' if response.nil? && timeout.nil?
+
       response
     end
 
     # Add a user to the list of ignored users. Those users will be ignored in message events at event processing level.
     # @note Ignoring a user only prevents any message events (including mentions, commands etc.) from them! Typing and
     #   presence and any other events will still be received.
-    # @param user [User, Integer, #resolve_id] The user, or its ID, to be ignored.
+    # @param user [User, String, Integer] The user, or its ID, to be ignored.
     def ignore_user(user)
       @ignored_ids << user.resolve_id
     end
 
     # Remove a user from the ignore list.
-    # @param user [User, Integer, #resolve_id] The user, or its ID, to be unignored.
+    # @param user [User, String, Integer] The user, or its ID, to be unignored.
     def unignore_user(user)
       @ignored_ids.delete(user.resolve_id)
     end
 
     # Checks whether a user is being ignored.
-    # @param user [User, Integer, #resolve_id] The user, or its ID, to check.
+    # @param user [User, String, Integer] The user, or its ID, to check.
     # @return [true, false] whether or not the user is ignored.
     def ignored?(user)
       @ignored_ids.include?(user.resolve_id)
@@ -665,11 +699,19 @@ module Discordrb
 
     private
 
-    # Throws a useful exception if there's currently no gateway connection
+    # Throws a useful exception if there's currently no gateway connection.
     def gateway_check
-      return if connected?
+      raise "A gateway connection is necessary to call this method! You'll have to do it inside any event (e.g. `ready`) or after `bot.run :async`." unless connected?
+    end
 
-      raise "A gateway connection is necessary to call this method! You'll have to do it inside any event (e.g. `ready`) or after `bot.run :async`."
+    # Logs a warning if there are servers which are still unavailable.
+    # e.g. due to a Discord outage or because the servers are large and taking a while to load.
+    def unavailable_servers_check
+      # Return unless there are servers that are unavailable.
+      return unless @unavailable_servers&.positive?
+
+      LOGGER.warn("#{@unavailable_servers} servers haven't been cached yet.")
+      LOGGER.warn('Servers may be unavailable due to an outage, or your bot is on very large servers that are taking a while to load.')
     end
 
     ### ##    ## ######## ######## ########  ##    ##    ###    ##        ######
@@ -741,6 +783,7 @@ module Discordrb
 
       debug("Voice server update received! chan: #{channel.inspect}")
       return unless channel
+
       @should_connect_to_voice.delete(server_id)
       debug('Updating voice server!')
 
@@ -777,6 +820,7 @@ module Discordrb
       channel = Channel.new(data, self)
       old_channel = @channels[channel.id]
       return unless old_channel
+
       old_channel.update_from(channel)
     end
 
@@ -947,10 +991,10 @@ module Discordrb
 
     def handle_dispatch(type, data)
       # Check whether there are still unavailable servers and there have been more than 10 seconds since READY
-      if @unavailable_servers && @unavailable_servers > 0 && (Time.now - @unavailable_timeout_time) > 10
+      if @unavailable_servers&.positive? && (Time.now - @unavailable_timeout_time) > 10
         # The server streaming timed out!
-        LOGGER.warn("Server streaming timed out with #{@unavailable_servers} servers remaining")
-        LOGGER.warn("This means some servers are unavailable due to an outage. Notifying ready now, we'll have to live without these servers")
+        LOGGER.debug("Server streaming timed out with #{@unavailable_servers} servers remaining")
+        LOGGER.debug('Calling ready now because server loading is taking a long time. Servers may be unavailable due to an outage, or your bot is on very large servers.')
 
         # Unset the unavailable server count so this doesn't get triggered again
         @unavailable_servers = 0
@@ -1043,6 +1087,10 @@ module Discordrb
         update_message(data)
 
         message = Message.new(data, self)
+
+        event = MessageUpdateEvent.new(message, self)
+        raise_event(event)
+
         return if message.from_bot? && !should_parse_self
 
         unless message.author
@@ -1105,7 +1153,7 @@ module Discordrb
         # Ignore friends list presences
         return unless data['guild_id']
 
-        now_playing = data['game']
+        now_playing = data['game'].nil? ? nil : data['game']['name']
         presence_user = @users[data['user']['id'].to_i]
         played_before = presence_user.nil? ? nil : presence_user.game
         update_presence(data)
@@ -1290,6 +1338,7 @@ module Discordrb
       @event_handlers ||= {}
       handlers = @event_handlers[event.class]
       return unless handlers
+
       handlers.dup.each do |handler|
         call_event(handler, event) if handler.matches?(event)
       end
@@ -1305,7 +1354,7 @@ module Discordrb
         begin
           handler.call(event)
           handler.after_call(event)
-        rescue => e
+        rescue StandardError => e
           log_exception(e)
         ensure
           @event_threads.delete(t)
@@ -1318,6 +1367,7 @@ module Discordrb
       @awaits.each do |_, await|
         key, should_delete = await.match(event)
         next unless key
+
         debug("should_delete: #{should_delete}")
         @awaits.delete(await.key) if should_delete
 
